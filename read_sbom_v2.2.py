@@ -6,7 +6,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
 # Définition du fichier d'entrée
-input_file = 'sbom-1704376030-juice-shop_withFlags.json'
+input_file = input('Choose a file path : ')
 result_data = []
 
 # Lecture du fichier JSON et normalisation
