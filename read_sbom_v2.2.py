@@ -57,11 +57,11 @@ for index, row in df.iterrows():
 df_vf_cvss_priority = pd.DataFrame(result_data)
 
 # Filtrage des lignes contenant 'AC:L' dans la colonne 'method'
-df_vf_cvss_priority = df_vf_cvss_priority.drop(df_vf_cvss_priority[df_vf_cvss_priority['vector'].str.contains('AC:L', na=False)].index)
+df_vf_cvss_priority = df_vf_cvss_priority.drop(df_vf_cvss_priority[df_vf_cvss_priority['vector'].str.contains('AC:L', na=False)].index) # renvoit les indexs des lignes à supprimer
 
-# Enregistrement du DataFrame dans un fichier Excel
-output_file = 'resultats_cves.xlsx'
-df_vf_cvss_priority.to_excel(output_file, index=False)
+# Enregistrement du DataFrame dans un fichier cvs (peut être changé en excel ou autre)
+output_file = 'resultats_cves.csv'
+df_vf_cvss_priority.to_cvs(output_file, index=False)
 
 # Affichage du DataFrame
 print(df_vf_cvss_priority)
