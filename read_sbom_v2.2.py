@@ -11,20 +11,27 @@ import argparse
 from extract_epss_percentile import extract_epss
 from extract_epss_percentile import extract_percentile
 
-# Arguments
-
-# Positional arguments : recquired
+# ------------------------- Arguments --------------------------
 parser = argparse.ArgumentParser()
 
-# Optional arguments : can be ignored
+# --- --- --- Positional arguments : recquis
 
+# - Input file -
+parser.add_argument("-f","--file",help="the file containing SBOM.json for chosen product. Compatible format : CycloneDX",required=True)
+# - CVSS version - 
+parser.add_argument("-V","--cvss",help="desired CVSS version. Enter one of the following versions : '3.1' for CVSSv3.1 ; '3' for CVSSv3 ; '2' for CVSSv2", required=True)
 
-# Input file
-parser.add_argument("-f","--file",help="the file containing SBOM.json for chosen product. Compatible format : CycloneDX")
-parser.add_argument("-v","--cvss",help="desired CVSS version")
+# --- --- --- Optional arguments : peuvent être ignorés 
+
+# ATTACK VECTOR argument (AV)
+parser.add_argument("-v","--filter-av",help="list of filtered attacks vectors")
+
+# ATTACK COMPLEXITY METRIC (High or low)
+parser.add_argument("-c","--filter-ac",help="filtered level of attack complexity metric (High or Low)") 
 
 args = parser.parse_args()
-# Paramétrage (Pour voir toutes les colonnes lorsque l'on affiche)
+
+# ---- Paramétrage (Pour voir toutes les colonnes lorsque l'on affiche) ----
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -61,46 +68,52 @@ with open(input_file, 'r') as jsonFile :
     df = pd.json_normalize(data["vulnerabilities"])
 
     # extraction des infos qui nous intéressent dans df :
-
-        #...
-
-    # extraction des infos qui nous intéressent dans df :
     for index, row in df.iterrows():  # on traite chaque colonne (row)
 
-        # Le nom des CVEs
+        # Récupération du nom (de l'ID) des CVEs
         cve_id = row['id']
 
-        # colonne ratings
+        # --- --- --- Traitement de la colonne 'ratings'
+
+        # Récupération de l'argument précisant la version de CVSS
         cvss_version = args.cvss
 
         if 'ratings' in row and row['ratings']:
-            # Filtrer les méthodes CVSS en fonction de l'argument --cvss
+
+
+            # --- Filtrer les méthodes CVSS en fonction de l'argument version
+
+            # --- CVSSv3.1
             if cvss_version == "3.1":
+
             # récupération CVSSv3.1 si existante
                 CVSSv31_ratings = [rating for rating in row['ratings'] if rating.get('method') == 'CVSSv31']
                 if CVSSv31_ratings:
                     CVSS_rating = CVSSv31_ratings[0]
                 else:
-                    #print(f"No CVSSv3.1 rating found for CVE {cve_id}.")
                     continue  # passer à la prochaine itération
+
+            # --- CVSSv3
             elif cvss_version == "3":
+
                 # récupération CVSSv3 si existante
                 CVSSv3_ratings = [rating for rating in row['ratings'] if rating.get('method') == 'CVSSv3']
                 if CVSSv3_ratings:
                     CVSS_rating = CVSSv3_ratings[0]
                 else:
-                    #print(f"No CVSSv3 rating found for CVE {cve_id}.")
                     continue  # passer à la prochaine itération
+
+            # ---  CVSSv2
             elif cvss_version == "2":
+
                 # récupération CVSSv2  si existante
                 CVSSv2_ratings = [rating for rating in row['ratings'] if rating.get('method') == 'CVSSv2']
                 if CVSSv2_ratings:
                     CVSS_rating = CVSSv2_ratings[0]
                 else:
-                    #print(f"No CVSSv2 rating found for CVE {cve_id}.")
                     continue  # passer à la prochaine itération
+                    
             else:
-                #print(f"Invalid CVSS version specified: {cvss_version}")
                 continue  # passer à la prochaine itération
 
             if CVSS_rating: # Ce que l'on récupère dans 'ratings'
@@ -117,108 +130,95 @@ with open(input_file, 'r') as jsonFile :
             # On stocke les valeurs dans un dictionnaire
             result_data.append({'id': cve_id, 'method': method, 'score': score, 'vector':vector}) 
             #print(type(result_data))
+
     # print(result_data)
 
-    # data frame crée
+    # création du dataframe
     df_cvss = pd.DataFrame(result_data)
         
 
 # ------------------------- Filtrage --------------------------
 
-    # Filtrer en fonction de AC:L ou AC:H ?
+    # ATTACK COMPLEXITY
 
-    choice_ac = input("\nRemove the complexity attack vector 'AC:L' (1) or 'AC:H' (2) ? : \n\nEnter the choice here : ")
+    choice_ac = args.filter_ac
     
     # il faut que l'utilisateur ait le choix de passer ou non cette étape
-    while choice_ac != '1' or '2':
-        if choice_ac == '1' :
-            df_cvss_filter = df_cvss.drop(df_cvss[df_cvss['vector'].str.contains('AC:L', na=False)].index) # renvoit les indexs des lignes à supprimer
+    if choice_ac == 'L' :
+        df_cvss_filter = df_cvss.drop(df_cvss[df_cvss['vector'].str.contains('AC:L', na=False)].index) # renvoit les indexs des lignes à supprimer
 
-            # On enlève les lignes où il y a des valeurs Nan sous tous les champs (mettre 'any' pour enlever la ligne si au moins un "Nan" dans l'un des champs)
-            df_dropna_cvss = df_cvss_filter.dropna(how='any')
-            df_sort = df_dropna_cvss.sort_values(by='score', ascending=False)   
-            #print(df_sort)
-            break
+        # On enlève les lignes où il y a des valeurs Nan sous tous les champs (mettre 'any' pour enlever la ligne si au moins un "Nan" dans l'un des champs)
+        df_dropna_cvss = df_cvss_filter.dropna(how='any')
+        df_sort = df_dropna_cvss.sort_values(by='score', ascending=False)   
+        #print(df_sort)
+                
 
-        elif choice_ac == '2' :
-            df_cvss_filter = df_cvss.drop(df_cvss[df_cvss['vector'].str.contains('AC:H', na=False)].index) # renvoit les indexs des lignes à supprimer
-            df_dropna_cvss = df_cvss_filter.dropna(how='any')
-            # Trier de sorte à voir les scores les plus élevés en premier
-            df_sort = df_dropna_cvss.sort_values(by='score', ascending=False)
-            #print(df_sort)
-            break
-
-        else : 
-            print ('\nNot a valid number, try again')
-            print('\n')
-            choice_ac = input("Remove the complexity attack vector 'AC:L' (1) or 'AC:H' (2) ? : \nEnter the choice here : \n")
-
-    # Filtre vector attack :
-
-    choice_av_N = (input('Remove Network Attacks ? Yes (1) / No (2) : '))
-    if choice_av_N == '1':
-        df_cvss_filter_av_N = df_sort.drop(df_sort[df_sort['vector'].str.contains('AV:N', na=False)].index) # renvoit les indexs des lignes à supprimer
-        #print(df_cvss_filter)
-    else :
-        df_cvss_filter_av_N = df_sort
-
-    choice_av_A = (input('Remove Adjacent Attacks ? Yes (1) / No (2) : '))
-
-    if choice_av_A == '1':
-        df_cvss_filter_av_L = df_cvss_filter_av_N.drop(df_cvss_filter_av_N[df_cvss_filter_av_N['vector'].str.contains('AV:A', na=False)].index) # renvoit les indexs des lignes à supprimer
-
-        # EPSS et PERCENTILE
-        
-        #  --- EPSS
-        colonne_id = df_cvss_filter_av_L['id'].values 
-        for cve in colonne_id :
-            epss_value = extract_epss(cve)
-            epss.append(float(epss_value)*100)
-        df_cvss_filter_av_L['epss (%)'] = epss
-        #print(df_cvss_filter_av_L)
-        
-        #  ---  PERCENTILE
-        for cve in colonne_id :
-            percentile_value = extract_percentile(cve)
-            percentile.append(float(percentile_value)*100)
-        df_cvss_filter_av_L['percentile (%)'] = percentile
-        #print(df_cvss_filter_av_L)
-
-        # dataframe final
-        df_final = df_cvss_filter_av_L
+    elif choice_ac == 'H' :
+        df_cvss_filter = df_cvss.drop(df_cvss[df_cvss['vector'].str.contains('AC:H', na=False)].index) # renvoit les indexs des lignes à supprimer
+        df_dropna_cvss = df_cvss_filter.dropna(how='any')
+        # Trier de sorte à voir les scores les plus élevés en premier
+        df_sort = df_dropna_cvss.sort_values(by='score', ascending=False)
+        #print(df_sort)
+                
 
     else :
-        df_cvss_filter_av_L = df_cvss_filter_av_N
-        
-        # EPSS et PERCENTILE
-        
-        #  --- EPSS
-        colonne_id = df_cvss_filter_av_N['id'].values 
-        for cve in colonne_id :
-            epss_value = extract_epss(cve)
-            epss.append(float(epss_value)*100)
+        df_sort=df_cvss.sort_values(by='score', ascending=False)
+    
+    
+    # ATTACK VECTOR :
+    choice_av = str(args.filter_av)
+    if choice_av:
+        choice_av = choice_av.split(',')
+        for v in choice_av:
+            if v not in choice_av:
+                print("Erreur : La valeur spécifiée après --filter-av n'est pas valide")
+                exit(1)  # code d'erreur
 
-        # ajout de la colonne epss
-        df_cvss_filter_av_N['epss (%)'] = epss
-        
-        
-        #  ---  PERCENTILE
-        for cve in colonne_id :
-            percentile_value = extract_percentile(cve)
+        df_vector = df_sort  # Réinitialisation df_vector à df_sort
+        for v in choice_av:
+            print('AV:'+v)
+            df_index = df_vector[df_vector['vector'].str.contains('AV:'+v)].index
+            df_vector = df_vector.drop(df_index)  # Filtrage des données en fonction des vecteurs choisis
+
+        #print(df_vector)
+
+
+    # EPSS et PERCENTILE
+    
+    #  --- EPSS
+    colonne_id = df_vector['id'].values 
+    for cve in colonne_id :
+        epss_value = extract_epss(cve)
+        if type(epss_value) == str : # not defined
+            epss.append(epss_value)
+        else:
+            epss.append(float(epss_value)*100)
+                
+
+
+    # ajout de la colonne epss
+    df_vector['epss (%)'] = epss
+           
+    #  ---  PERCENTILE
+    for cve in colonne_id :
+        percentile_value = extract_percentile(cve)
+        if type(percentile_value) == str : # not defined
+            percentile.append(percentile_value)
+        else:
             percentile.append(float(percentile_value)*100)
 
-        # ajout de la colonne percentile
-        df_cvss_filter_av_N['percentile (%)'] = percentile
+    # ajout de la colonne percentile
+    df_vector['percentile (%)'] = percentile
 
-        # dataframe final
-        df_final = df_cvss_filter_av_N
+    # dataframe final
+    df_final = df_vector
 
-        # --- AFFICHAGE DES RESULTATS ---
-        #print(df_cvss_filter_av_N)
+    # --- AFFICHAGE DES RESULTATS ---
+    #print(df_cvss_filter_av_N)
 
 # ---- AFFICHAGE DES RESULTATS ----
 
-    print("\nResults shown below :\n ")
+    #print("\nResults shown below :\n ")
     print(df_final)
 
 # ------------------------- OUTPUT --------------------------
